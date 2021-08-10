@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="fb17ab42-c1f7-4fd3-a7b4-bab28fb2c11c" >
+		<http:listener-connection host="0.0.0.0" port="${http.port}" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="cbbb2410-5f9d-4b54-b9d5-ffd32d64673a" >
+		<http:request-connection host="localhost" port="8082" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_configuration1" doc:name="HTTP Request configuration" doc:id="7e765fca-4f15-425b-b6ba-05fc58920837" >
+		<http:request-connection host="localhost" port="8083" />
+	</http:request-config>
+	<flow name="brewary-processapiFlow" doc:id="4b4e9298-7c40-4efc-b809-fc35971eda97" >
+		<http:listener doc:name="Listener" doc:id="86f35847-c0fe-4172-bc28-8421cc9908ca" config-ref="HTTP_Listener_config" path="${http.path}"/>
+		<ee:transform doc:name="Assigning queryparams" doc:id="75691fbe-8fa4-4056-8d91-c29fa61d6342" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="state" ><![CDATA[attributes.queryParams.state]]></ee:set-variable>
+				<ee:set-variable variableName="city" ><![CDATA[attributes.queryParams.city]]></ee:set-variable>
+				<ee:set-variable variableName="states" ><![CDATA[attributes.queryParams.states]]></ee:set-variable>
+				<ee:set-variable variableName="cities" ><![CDATA[attributes.queryParams.cities]]></ee:set-variable>
+				<ee:set-variable variableName="source" ><![CDATA[attributes.queryParams.source]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="a1d7cc4c-fb77-4555-90d7-019d84f0f5a6" >
+			<when expression="(vars.state !=null) and (vars.city !=null)">
+				<http:request method="GET" doc:name='Requesting data from"DB"' doc:id="f2f6b09d-a7ee-4cb4-b8c0-62e290516085" config-ref="HTTP_Request_configuration" path="/api/brewary/create" responseTimeout="#[50000000]"/>
+				<ee:transform doc:name="Transform Message" doc:id="bd8216c8-37b5-4fcc-9c37-ec5673430c1f" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload filter ($.state == vars.state and $.city == vars.city)]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="087c553c-9dc1-4d9f-9a02-fa0d9019f636" message="#[payload]"/>
+			</when>
+			<when expression="#[(vars.states)!=null]">
+				<choice doc:name="Choice" doc:id="b1195691-7a69-4136-87ab-3dd7cae291cf" >
+					<when expression='vars.source=="db"'>
+						<ee:transform doc:name="Assigning empty array and storing querparams" doc:id="796903aa-2438-44ea-8781-be03be43352c" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.states]]></ee:set-payload>
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="payload" ><![CDATA[[]]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<foreach doc:name="For Each" doc:id="2cb41656-3821-474b-a00f-adb84c616d74" collection='#[payload splitBy ","]'>
+							<ee:transform doc:name="Storing single state value" doc:id="b40d0b89-c47b-456d-880a-dc4d12735404" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+								</ee:message>
+								<ee:variables >
+									<ee:set-variable variableName="statebystate" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+							<http:request method="GET" doc:name='RequestRequesting data from"DB"' doc:id="9a0cd59b-cf40-4b10-b7b9-68d500df33a2" config-ref="HTTP_Request_configuration" path="/api/brewary" responseTimeout="#[5000000000]"/>
+							<ee:transform doc:name="Transform Message" doc:id="18aa793a-4abe-4d89-970b-70d1ffdfc371" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload filter ($.state==vars.statebystate)]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+							<set-variable value="#[vars.payload ++ payload]" doc:name="Appending payload with an empty array" doc:id="b82ba031-efa0-4d15-ad77-f645bb8be823" variableName="payload"/>
+						</foreach>
+						<ee:transform doc:name="output payload" doc:id="b354fd9e-8226-4386-bac1-fdb65c76baea" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Assigning empty array and storing querparams" doc:id="f71262d4-0d4f-4241-abc6-61edbf928ad2" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.states]]></ee:set-payload>
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="payload" ><![CDATA[[]]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<foreach doc:name="For Each" doc:id="35f3e1f0-7018-49f3-906c-819a707d929a" collection='#[payload splitBy ","]'>
+							<ee:transform doc:name="Storing single state value" doc:id="f4c1fb1f-2ce0-4935-9e5a-cab24e626260" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+								</ee:message>
+								<ee:variables >
+									<ee:set-variable variableName="statebystate" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+							<http:request method="GET" doc:name='Requesting data from"API"' doc:id="1d76ce70-23ff-49a2-b2a4-b0bb1b1f6350" config-ref="HTTP_Request_configuration1" path="/api/brewary-api-sapi" responseTimeout="#[500000000]"/>
+							<ee:transform doc:name="filling records based on states" doc:id="dc3e8bdb-fe71-4e99-808a-50b652c0a62d" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload filter ($.state==vars.statebystate)]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+							<set-variable value="#[vars.payload ++ payload]" doc:name="Appending payload with an empty array" doc:id="96ca237c-13ec-4e7a-be42-aafce3cbb8e2" variableName="payload"/>
+						</foreach>
+						<ee:transform doc:name="output payload" doc:id="1f0d84f2-5cca-4ccd-b109-03168f8d426c" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<when expression="(vars.cities)!=null">
+				<choice doc:name="Choice" doc:id="fc3a1ae3-82d1-4a55-ab4a-b7de4c19fdaa" >
+					<when expression='vars.source=="db"'>
+						<ee:transform doc:name="Assigning empty array and storing querparams" doc:id="9166a594-893b-4813-8752-a3d89fc411d6" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.cities]]></ee:set-payload>
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="payload" ><![CDATA[[]]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<foreach doc:name="For Each" doc:id="91a0070a-a12c-42d6-885d-a81c25faa49d" collection='#[payload splitBy ","]'>
+							<ee:transform doc:name="Storing single city value" doc:id="f29a5be7-be9d-4e94-98bd-1a5d562380ef" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+								</ee:message>
+								<ee:variables >
+									<ee:set-variable variableName="citybycity" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+							<http:request method="GET" doc:name='Requesting data from"DB"' doc:id="2d37b152-5bdf-4c67-ba9b-72279b43a978" config-ref="HTTP_Request_configuration" path="/api/brewary" responseTimeout="#[500000000]"/>
+							<ee:transform doc:name="filling records based on cities" doc:id="df06517b-5c5f-4d62-bce0-8522fe53eebd" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload filter ($.state==vars.citybycity)]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+							<set-variable value="#[vars.payload ++ payload]" doc:name="Appending payload with an empty array" doc:id="458b1ea3-0505-4373-8092-c572504300dc" variableName="payload"/>
+						</foreach>
+						<ee:transform doc:name="output payload" doc:id="990bcc47-fbb1-47e5-b99e-d58047ffe67e" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Assigning empty array and storing querparams" doc:id="a1fc16f9-1d49-4679-ba58-4749798b88f5" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.cities]]></ee:set-payload>
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="payload" ><![CDATA[[]]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<foreach doc:name="For Each" doc:id="fbfca53d-a4de-4c1c-8b77-0d480c6264df" collection='#[payload splitBy ","]'>
+							<ee:transform doc:name="Storing single city value" doc:id="07a8eebf-70ba-4245-aeb4-d8bc51ff8b5d" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+								</ee:message>
+								<ee:variables >
+									<ee:set-variable variableName="citybycity" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+							<http:request method="GET" doc:name='Requesting data from"API"' doc:id="1c5b3c99-314e-441e-8032-c463cd393fbb" config-ref="HTTP_Request_configuration1" path="/api/brewary-api-sapi" responseTimeout="#[500000000]"/>
+							<ee:transform doc:name="Filling records based on cities" doc:id="e2411d51-50d0-4b12-8076-7903691408f6" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload filter ($.state==vars.citybycity)]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+							<set-variable value="#[vars.payload ++ payload]" doc:name="Appending payload with an empty array" doc:id="0da12f31-8fba-4853-bc2e-516a3cbbd091" variableName="payload"/>
+						</foreach>
+						<ee:transform doc:name="output payload" doc:id="cd9d0ce9-0fbc-46eb-bc66-8dda1b0b322d" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="541c5c51-692b-4412-9fc8-deebaf565811" message='#["no queryparams"]'/>
+			</otherwise>
+		</choice>
+		<ee:transform doc:name="Transform Message" doc:id="c46f0062-77cb-47a6-9606-9c97f9520f7a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map
+{
+"id": $.id,
+"name": $.name,
+"brewery_type": $.brewery_type,
+"street": $.street,
+"address_2": if($.street !=null)"address_exist" else "no address found",
+"address_3":$.address_3,
+"city": $.city,
+"state":$.state,
+"county_province": $.county_province,
+"postal_code": ($.postal_code splitBy "-")[0],
+"country": $.country,
+"longitude": if($.longitude != null) round($.longitude) else "null",
+"latitude": if($.latitude != null) round($.latitude) else "null",
+"phone":if($.phone !=null)$.phone[0 to 4] else "null",
+"website_url": $.website_url,
+"updated_at": ($.updated_at splitBy "T")[0],
+"created_at": ($.created_at splitBy "T")[0]
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Final Logger" doc:id="5329cbd1-aa4b-4bfc-973c-94d73695641c" message='#["Final output"]'/>
+	
+</flow>
+</mule>
